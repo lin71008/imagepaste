@@ -1,33 +1,46 @@
 Ima![](README/README0.png)gePaste
 ==========
 
-Paste image from clipboard, save the image to a file and insert the relative path on the current cursor.
-
+Simple plugin for insert image from clipboard at the cursor position.
 
 # Installation
 
-use package control
+In Sublime press `Ctrl+Shift+P` -> `Package Control: Install Package` -> `ImagePaste`
+
+## for Windows
+
+```bash
+python3 -m pip install Pillow
+```
 
 ## for Linux 
 
-pip install PyUserInput, pyscreenshot 
-and install python-pyqt4 as backend of pyscreenshot
+```bash
+sudo apt install xclip
+```
 
-# Usage    {
-        "caption": "ImagePaste: Paste Image From Clipboard",
-        "command": "image_paste"
-    },
+# Usage
 
-Take a screenshot, then just ctrl+v to paste it. It will save a png file to current directory and insert the file path in the current cursor. 
+```json
+[
+	{
+	    "caption": "ImagePaste: Paste Image From Clipboard",
+	    "command": "image_paste"
+	},
+	{
+	    "caption": "ImagePreview: Preview Markdown Images",
+	    "command": "image_preview"
+	}
+]
+```
 
-1. When copy to markdown buffer, it will display the image path for markdown, eg: \!\[\](pic_path)
-2. When copy to other buffer, it will display only the image path pic_path at the cursor. 
-     {
-        "caption": "ImagePaste: Paste Image From Clipboard",
-        "command": "image_paste"
-    },
-![](./gif/imagepaste.gif)
-3. Preview within Sublime Text.
+Take a screenshot, then press `Ctrl+V` to paste it.
+It will save a png file to subdirectory (you can specify it in `imagepaste.sublime-settings`) and insert the file path in the current cursor position.
 
-![](./gif/imgPreview.gif)
+#TODO
 
+- [x] Rewrite old code
+- [x] Paste PNG from clipboard
+- [ ] Add Linux support
+- [ ] Preview image in markdown
+- [ ] Paste GIF from clipboard

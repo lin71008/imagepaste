@@ -1,5 +1,6 @@
 The MIT License (MIT)
 
+Copyright (c) 2018 uhx
 Copyright (c) 2014 robinchenyu
 
 Permission is hereby granted, free of charge, to any person obtaining a copy

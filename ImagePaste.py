@@ -3,220 +3,177 @@ import sublime_plugin
 import os
 import sys
 import re
-import subprocess
-import shutil
 from imp import reload
+import datetime
 
-print(sys.getdefaultencoding())
+from imagepaste.utils import __osutils__
+
 reload(sys)
-# sys.setdefaultencoding('utf-8')
 
-if sys.platform == 'win32':
-	package_file = os.path.normpath(os.path.abspath(__file__))
-	package_path = os.path.dirname(package_file)
-	lib_path =  os.path.join(package_path, "lib")
-	if lib_path not in sys.path:
-	    sys.path.append(lib_path)
-	    print(sys.path)
-	from PIL import ImageGrab
-	from PIL import ImageFile
-	from PIL import Image
+def atoi(text):
+    return int(text) if text.isdigit() else text
 
-class ImageCommand(object):
-	def __init__(self, *args, **kwgs):
-		super(ImageCommand, self).__init__(*args, **kwgs)
-		self.settings = sublime.load_settings('imagepaste.sublime-settings')
+def natural_keys(text):
+    return [ atoi(c) for c in re.split('(\d+)', text) ]
 
-		# get the image save dirname
-		self.image_dir_name = self.settings.get('image_dir_name', None)
-		if len(self.image_dir_name) == 0:
-			self.image_dir_name = None
-		print("[%d] get image_dir_name: %r"%(id(self.image_dir_name), self.image_dir_name))
+class ImagePasteBase(object):
+    def __init__(self, *args, **kwgs):
+        super(ImagePasteBase, self).__init__(*args, **kwgs)
+        self.settings = sublime.load_settings('imagepaste.sublime-settings')
 
-	def run_command(self, cmd):
-		cwd = os.path.dirname(self.view.file_name())
-		print("cmd %r" % cmd)
-		proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, env=os.environ)
-		
-		try:
-		    outs, errs = proc.communicate(timeout=15)
-		    print("outs %r %r" % (outs, proc))
-		except Exception:
-		    proc.kill()
-		    outs, errs = proc.communicate()
-		print("outs %r, errs %r" % (b'\n'.join(outs.split(b'\r\n')), errs))
-		if errs is None or len(errs) == 0:
-			return outs.decode()
-		
-	def get_filename(self):
-		view = self.view
-		filename = view.file_name()
+        # get the image save dirname
+        self.image_directory = self.settings.get('image_directory_name', None)
+        self.paste_absolute_path = self.settings.get('paste_absolute_path', False)
+        
+        if not self.image_directory:
+            self.image_directory = None
 
-		# create dir in current path with the name of current filename
-		dirname, _ = os.path.splitext(filename)
+    def paste_absolute(self):
+        return self.paste_absolute_path
 
-		# create new image file under currentdir/filename_without_ext/filename_without_ext%d.png
-		fn_without_ext = os.path.basename(dirname)
-		if self.image_dir_name is not None:
-			subdir_name = os.path.join(os.path.split(dirname)[0], self.image_dir_name)
-		else:
-			subdir_name = dirname
-		if not os.path.lexists(subdir_name):
-			os.mkdir(subdir_name)
-		i = 0
-		while True:
-			# relative file path
-			rel_filename = os.path.join("%s/%s%d.png" % (self.image_dir_name if self.image_dir_name else fn_without_ext, fn_without_ext, i))
-			# absolute file path
-			abs_filename = os.path.join(subdir_name, "%s%d.png" % (fn_without_ext, i))
-			if not os.path.exists(abs_filename):
-				break
-			i += 1
+    def get_current_filename(self):
+        '''
+        returns filename without extension
+        '''
+        fullpath, extension = os.path.splitext(self.view.file_name())
 
-		print("save file: " + abs_filename + "\nrel " + rel_filename)
-		return abs_filename, rel_filename
+        return os.path.basename(fullpath)
 
-class ImagePasteCommand(ImageCommand, sublime_plugin.TextCommand):
+    def get_current_dir(self):
+        return os.path.dirname(self.view.file_name())
 
-	def run(self, edit):
-		view = self.view
-		print("[%d] image_dir_name: %r"%(id(self.image_dir_name),self.image_dir_name))
-		rel_fn = self.paste()
+    def get_image_directory(self):
+        ''' relative path to image directory '''
+        subdir_name = self.image_directory
 
-		if not rel_fn:
-			view.run_command("paste")
-			return
-		for pos in view.sel():
-			# print("scope name: %r" % (view.scope_name(pos.begin())))
-			if 'text.html.markdown' in view.scope_name(pos.begin()):
-				view.insert(edit, pos.begin(), "![](%s)" % rel_fn)
-			else:
-				view.insert(edit, pos.begin(), "%s" % rel_fn)
-			# only the first cursor add the path
-			break
-			
+        if not subdir_name:
+            subdir_name = self.get_current_filename()
 
-	def paste(self):
-		if sys.platform != 'win32':
-			dirname = os.path.dirname(__file__)
-			command = ['/usr/bin/python3', os.path.join(dirname, 'bin/imageutil.py'), 'save']
-			abs_fn, rel_fn = self.get_filename()
-			command.append(abs_fn)
+        return  subdir_name
 
-			out = self.run_command(" ".join(command))
-			if out and out[:4] == "save":
-				return rel_fn
-		else: # win32
-			ImageFile.LOAD_TRUNCATED_IMAGES = True
-			im = ImageGrab.grabclipboard()
-			if im:
-				abs_fn, rel_fn = self.get_filename()
-				im.save(abs_fn,'PNG')	
-				return rel_fn
+    def get_image_abs_directory(self):
+        ''' full path to image directory '''
+        return os.path.join(self.get_current_dir(), self.get_image_directory())
 
-		print('clipboard buffer is not image!')
-		return None
+    def get_image_path(self):
+        abs_directory = self.get_image_abs_directory()
+        rel_directory = self.get_image_directory()
 
+        now = datetime.datetime.now()
 
+        filename = '{0:%H}-{0:%M}-{0:%S} {0:%d}-{0:%m}-{0:%y}.png'.format(now)
 
-class ImageGrabCommand(ImageCommand, sublime_plugin.TextCommand):
-	def run(self, edit):
-		view = self.view
-		rel_fn = self.paste()
-		if not rel_fn:
-			view.run_command("paste")
-			return
-		for pos in view.sel():
-			# print("scope name: %r" % (view.scope_name(pos.begin())))
-			if 'text.html.markdown' in view.scope_name(pos.begin()):
-				view.insert(edit, pos.begin(), "![](%s)" % rel_fn)
-			else:
-				view.insert(edit, pos.begin(), "%s" % rel_fn)
-			# only the first cursor add the path
-			break
-			
+        abs_path = os.path.join(abs_directory, filename)
+        rel_path = os.path.join(rel_directory, filename)
 
-	def paste(self):
-		# ImageFile.LOAD_TRUNCATED_IMAGES = True
-		dirname = os.path.dirname(__file__)
-		command = ['/usr/bin/python3', os.path.join(dirname, 'bin/imageutil.py'), 'grab']
-		abs_fn, rel_fn = self.get_filename()
-		tempfile1 = "/tmp/imagepaste1.png"
-		command.append(tempfile1)
-		print("command: ", command)
+        return abs_path, rel_path
 
-		out = self.run_command(" ".join(command))
-		if out and out[:4] == "grab":
-			ret = sublime.ok_cancel_dialog("save to file?")
-			print("ret %r" % ret)
-			if ret:
-				shutil.move(tempfile1, abs_fn)
-				return rel_fn
-			else:
-				return None
-		# im = ImageGrab.grabclipboard()
-		# if im:
-		# 	abs_fn, rel_fn = self.get_filename()
-		# 	im.save(abs_fn,'PNG')	
-		# 	return rel_fn
-		else:
-			print('clipboard buffer is not image!')
-			return None
+__osutils__.get_clipboard_image
 
+class ImagePasteCommand(ImagePasteBase, sublime_plugin.TextCommand):
+    def __init__(self, *args, **kwgs):
+        super(ImagePasteCommand, self).__init__(*args, **kwgs)
+        self.image_data = None
+        self.image_path = ''
 
-class ImagePreviewCommand(ImageCommand, sublime_plugin.TextCommand):
-	def __init__(self, *args):
-	#	self.view = view
-		super(ImagePreviewCommand, self).__init__(*args)	    
-		# self.phantom_set = sublime.PhantomSet(self.view)
-		self.displayed = False
+    def run(self, edit):
+        view = self.view
 
+        image_data = __osutils__.get_clipboard_image()
+        if not image_data:
+            # as normal Ctrl+V
+            view.run_command('paste')
+            return
 
+        if self.image_data != image_data:
+            image_abs_path, image_rel_path = self.save_image(image_data)
 
+            if self.paste_absolute():
+                image_path = image_abs_path
+            else:
+                image_path = image_rel_path
 
-	def get_line(self):
-		v = self.view
-		rows, _ = v.rowcol(v.size())
-		for row in range(rows+1):
-			pt = v.text_point(row, 0)
-			tp_line = v.line(pt)
-			line = v.substr(tp_line)
-			yield tp_line, line
-		raise StopIteration
+            if not image_path:
+                return
 
-	def run(self, edit):
-		print("run phantom")
-		view = self.view
-		dirname = os.path.dirname(__file__)
-		for tp, line in self.get_line():
-			m=re.search(r'!\[([^\]]*)\]\(([^)]*)\)', line)
-			if m:
-				name, file1 = m.group(1), m.group(2)
-				message = ""
-				file2 = os.path.join(os.path.dirname(view.file_name()), file1)
-				# print("%s = %s" % (name, file1))
-				region = tp
+            # fix image path for html
+            image_path = image_path.replace('\\', '/').replace(' ', '%20')
+            self.image_path = image_path
+            self.image_data = image_data
 
-				command = ['/usr/bin/python3', os.path.join(dirname, 'bin/imageutil.py'), 'size']
-				command.append(file2)
+        selections = view.sel()
 
-				out = self.run_command(" ".join(command))
-				widthstr, heightstr = out.split(',')
-				# with Image.open(file2) as im:
-				# print("file: %s with size: %d %d" % (file1, im.width, im.height))
-				message = '''<body>
-				<img width="%s" height="%s" src="file://%s"></img>
-				</body>''' % (widthstr, heightstr, file2)
-				if len(name) == 0:
-					name = file1
+        if not selections:
+            return
+        # get the cursor
+        selection_pos = selections[0].begin()
 
-		# phantom = sublime.Phantom(region, messag e, sublime.LAYOUT_BLOCK)
-				print("message %s" % message)
-				if not self.displayed:
-					self.view.add_phantom(name, region, message, sublime.LAYOUT_BLOCK)
-				else:
-					self.view.erase_phantoms(name)
-		# self.phantom_set.update([phantom])
-		# view.show_popup('<img src="file://c://msys64/home/chenyu/diary/diary/diary8.jpg">')
-		self.displayed = not self.displayed
+        if view.scope_name(selection_pos).startswith('text.html.markdown'):
+            view.insert(edit, selection_pos, '![]({})'.format(self.image_path))
+        else:
+            view.insert(edit, selection_pos, '{}'.format(self.image_path))
 
+    def save_image(self, data):
+        image_dir = self.get_image_abs_directory()
+
+        if not os.path.lexists(image_dir):
+            os.mkdir(image_dir)
+
+        abs_path, rel_path = self.get_image_path()
+
+        with open(abs_path, 'wb') as f:
+            f.write(data)
+
+            return abs_path, rel_path
+
+        return None, None
+
+# class ImagePreviewCommand(ImageCommand, sublime_plugin.TextCommand):
+#   def __init__(self, *args):
+#   #   self.view = view
+#       super(ImagePreviewCommand, self).__init__(*args)        
+#       # self.phantom_set = sublime.PhantomSet(self.view)
+#       self.displayed = False
+
+#   def get_line(self):
+#       v = self.view
+#       rows, _ = v.rowcol(v.size())
+#       for row in range(rows+1):
+#           pt = v.text_point(row, 0)
+#           tp_line = v.line(pt)
+#           line = v.substr(tp_line)
+#           yield tp_line, line
+#       raise StopIteration
+
+#   def run(self, edit):
+#       print("run phantom")
+#       view = self.view
+#       dirname = os.path.dirname(__file__)
+#       for tp, line in self.get_line():
+#           m=re.search(r'!\[([^\]]*)\]\(([^)]*)\)', line)
+#           if m:
+#               name, file1 = m.group(1), m.group(2)
+#               message = ""
+#               file2 = os.path.join(os.path.dirname(view.file_name()), file1)
+#               # print("%s = %s" % (name, file1))
+#               region = tp
+
+#               command = ['/usr/bin/python3', os.path.join(dirname, 'bin/imageutil.py'), 'size']
+#               command.append(file2)
+
+#               out = self.run_command(" ".join(command))
+#               widthstr, heightstr = out.split(',')
+
+#               message = '''<body>
+#               <img width="%s" height="%s" src="file://%s"></img>
+#               </body>''' % (widthstr, heightstr, file2)
+#               if len(name) == 0:
+#                   name = file1
+
+#               print("message %s" % message)
+#               if not self.displayed:
+#                   self.view.add_phantom(name, region, message, sublime.LAYOUT_BLOCK)
+#               else:
+#                   self.view.erase_phantoms(name)
+
+#       self.displayed = not self.displayed
