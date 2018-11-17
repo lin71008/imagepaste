@@ -39,9 +39,8 @@ class UtilitiesBase(object):
         '''
         Runs command and returns it stdout or None
         '''
-        cwd = os.path.dirname(self.view.file_name())
 
-        proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, env=os.environ)
+        proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=os.environ)
         
         try:
             outs, errs = proc.communicate(timeout=5)

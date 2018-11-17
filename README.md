@@ -41,6 +41,6 @@ It will save a png file to subdirectory (you can specify it in `imagepaste.subli
 
 - [x] Rewrite old code
 - [x] Paste PNG from clipboard
-- [ ] Add Linux support
+- [x] Add Linux support
 - [ ] Preview image in markdown
 - [ ] Paste GIF from clipboard
