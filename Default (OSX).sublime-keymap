@@ -1,6 +1,6 @@
 [
     {
-        "keys": ["ctrl+v"],
+        "keys": ["super+v"],
         "command": "image_paste",
     },
 ]

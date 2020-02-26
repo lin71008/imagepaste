@@ -4,24 +4,28 @@ import subprocess
 import shutil
 from io import BytesIO
 
-IS_LINUX = sys.platform != 'win32'
+PLATFORM = sys.platform
 
-if not IS_LINUX:
+PLATFORMS_SUPPORTING_PILLOW = ['win32']
+
+if PLATFORM in PLATFORMS_SUPPORTING_PILLOW:
+    # Use the version of Pillow distributed with package
     package_file = os.path.normpath(os.path.abspath(__file__))
     package_path = os.path.dirname(package_file)
-    lib_path =  os.path.join(package_path, "lib")
+    lib_path =  os.path.join(package_path, "lib-{}".format(PLATFORM))
+
+    if not os.path.is_directory(lib_path):
+        raise NotImplementedError('Pillow distribution for {!r} is missing'.format(PLATFORM))
 
     if lib_path not in sys.path:
         sys.path.append(lib_path)
 
-    from PIL import ImageGrab
-    from PIL import ImageFile
-    from PIL import Image
-
+    from PIL import ImageGrab, Image, ImageFile
     ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 class UtilitiesBase(object):
-    def __init__(self, *args, **kwgs):
+    def __init__(self, executable_location=None, *args, **kwgs):
+        self.executable_location = executable_location
         super(UtilitiesBase, self).__init__(*args, **kwgs)
 
     def get_clipboard_image(self):
@@ -32,28 +36,31 @@ class UtilitiesBase(object):
         '''
         raise NotImplementedError("Please Implement this method")
 
-    def get_image_size(self):
-        raise NotImplementedError("Please Implement this method")
+    def handle_errors(self, errs):
+        if errs:
+            raise Exception(errs)
+
 
     def run_command(self, command):
         '''
         Runs command and returns it stdout or None
         '''
 
-        proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=os.environ)
-        
+
+        proc = subprocess.Popen(command, shell=False,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                env=os.environ)
+
         try:
             outs, errs = proc.communicate(timeout=5)
         except subprocess.TimeoutExpired:
             proc.kill()
             outs, errs = proc.communicate()
 
-        if errs:
-            raise Exception(errs)
-
+        self.handle_errors(errs)
         return outs
 
-class WinUtils(UtilitiesBase):
+class PillowBasedPaste(UtilitiesBase):
     def get_clipboard_image(self):
         im = ImageGrab.grabclipboard()
 
@@ -65,23 +72,47 @@ class WinUtils(UtilitiesBase):
 
             return output.getvalue()
 
-    def get_image_size(self, data):
-        image = Image.open(BytesIO(data))
-
-        return image.width, image.height
-
-class LinuxUtils(UtilitiesBase):
+class XclipBasedPaste(UtilitiesBase):
     def get_clipboard_image(self):
-        # TODO: replace xclip with some python library (which i cant find)
-        #       or implement own code to grab image from clipboard
-        image = self.run_command('xclip -se c -t image/png -o')
+
+        if self.executable_location is None:
+            raise Exception('no executable')
+
+        image = self.run_command([self.executable_location, '-se', 'c', '-t', 'image/png', '-o'])
 
         if not image:
             return None
 
         return image
 
-if IS_LINUX:
-    __osutils__ = LinuxUtils()
-else:
-    __osutils__ = WinUtils()
+class PngpasteBasedPaste(UtilitiesBase):
+    def get_clipboard_image(self):
+
+        if self.executable_location is None:
+            raise Exception('no executable')
+
+
+        image = self.run_command([self.executable_location, '-'])
+
+        if not image:
+            return None
+
+        return image
+
+    def handle_errors(self, errs):
+        if errs:
+            if errs == b'pngpaste: No image data found on the clipboard, or could not convert!\n':
+                return
+            else:
+                raise Exception(errs)
+
+
+def os_appropriate_utils(settings):
+    if PLATFORM in PLATFORMS_SUPPORTING_PILLOW:
+        return PillowBasedPaste()
+    elif PLATFORM == 'linux':
+        return XclipBasedPaste(executable_location=settings.get('xclip_executable'))
+    elif PLATFORM == 'darwin':
+        return PngpasteBasedPaste(executable_location=settings.get('pngpaste_executable'))
+    else:
+        raise NotImplementedError('Unsupported platform {!r}'.format(PLATFORM))
