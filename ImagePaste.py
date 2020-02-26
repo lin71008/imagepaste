@@ -3,12 +3,9 @@ import sublime_plugin
 import os
 import sys
 import re
-from imp import reload
 import datetime
 
 from imagepaste.utils import os_appropriate_utils
-
-reload(sys)
 
 def atoi(text):
     return int(text) if text.isdigit() else text
