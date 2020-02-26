@@ -1,5 +1,6 @@
 The MIT License (MIT)
 
+Copyright (c) 2020 lukauskas
 Copyright (c) 2018 uhx
 Copyright (c) 2014 robinchenyu
 
