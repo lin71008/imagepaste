@@ -30,7 +30,13 @@ Change the location of executable in `imagepaste.sublime-settings` if neccessary
 
 # Installation
 
-In Sublime press `Ctrl+Shift+P` -> `Package Control: Install Package` -> `ImagePaste`
+Through Package Control:
+
+`Ctrl+Shift+P` -> `Package Control: Add Repository` -> `https://github.com/lukauskas/imagepaste`
+
+Then:
+
+`Ctrl+Shift+P` -> `Package Control: Install Package` -> `imagepaste`
 
 # Usage
 
