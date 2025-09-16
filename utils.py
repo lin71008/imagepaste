@@ -14,7 +14,7 @@ if PLATFORM in PLATFORMS_SUPPORTING_PILLOW:
     package_path = os.path.dirname(package_file)
     lib_path =  os.path.join(package_path, "lib-{}".format(PLATFORM))
 
-    if not os.path.is_directory(lib_path):
+    if not os.path.isdir(lib_path):
         raise NotImplementedError('Pillow distribution for {!r} is missing'.format(PLATFORM))
 
     if lib_path not in sys.path:
