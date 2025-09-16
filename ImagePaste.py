@@ -89,7 +89,7 @@ class ImagePasteCommand(ImagePasteBase, sublime_plugin.TextCommand):
             view.run_command('paste')
             raise
 
-        if not image_data:
+        if image_data is None:
             # as normal Ctrl+V
             view.run_command('paste')
             return
